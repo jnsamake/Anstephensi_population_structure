@@ -1,0 +1,111 @@
+#####################################################################################################
+# File: Anstephensi_pop_PCA.rmd
+#
+# Created by Jeanne N. Samake in June 2022  
+# For use in R
+#
+# Description: Principal component analysis of Anopheles stephensi populations based on independent 
+# bi-allelic SNPs from reduced representation genetic data.
+#
+#NOTE: This script requires PLINK v1.9
+#####################################################################################################
+
+
+#(1) Generate PCA output using PLINK 
+```{r }
+system("./plink --bfile autosomal.plink.INDEP --maf 0.004 --geno 0.20 --pca --out autosomal.plink.INDEP.pca --noweb")
+```
+
+#Analyze and visualize PCA results 
+
+#(2) Load tidyverse
+```{r}
+remove.packages("cli")
+install.packages("cli")
+
+install.packages("tidyverse", dependencies = TRUE)
+library(tidyverse)
+```
+
+#(3) Upload PCA and Pop/Family ID files
+```{r }
+eigenValues <- read_delim("autosomal.plink.INDEP.pca.eigenval", delim = " ", col_names = F)
+eigenVectors <- read_delim("autosomal.plink.INDEP.pca.eigenvec", delim = " ", col_names = F)
+famDetails <- read.csv("samplePopId.csv", header = TRUE)
+
+#Create sampleId column in eigenVector dataframe
+eigenVectors$extractionID <- substr(eigenVectors$X1,1,5)
+
+#Change column names of family details
+colnames(famDetails) <- c("extractionID", "Pop.ID", "Sample.ID")
+
+#Join eigenVector with sample data
+newEigenVectors <- left_join(eigenVectors, famDetails, by = "extractionID")
+
+#Remove unwanted columns in newEigenVectors dataframe
+pcaEigenVectors <- newEigenVectors[c(24,2:22)]
+
+```
+
+#(4) Proportion of variation captured by each vector
+```{r }
+eigen_percent <- round((eigenValues / (sum(eigenValues))*100), 2)
+```
+
+#(5) PCA plot
+```{r }
+pcaEigenVectors$Pop.ID = factor(pcaEigenVectors$Pop.ID)
+ggplot(data = pcaEigenVectors) +
+  geom_point(mapping = aes(x = X3, y = X4, color = Pop.ID, shape = Pop.ID), size = 3, show.legend = TRUE ) +
+  geom_hline(yintercept = 0, linetype="dotted") +
+  geom_vline(xintercept = 0, linetype="dotted") +
+  scale_shape_manual(values = 0:6) +
+  labs(x = paste0("Principal component 1 (",eigen_percent[1,1]," %)"),
+      y = paste0("Principal component 2 (",eigen_percent[2,1]," %)"),
+      colour = "An. stephensi Population", shape = "An. stephensi Population") +
+  theme_classic(base_size = 15)
+
+ ggsave("pca_AnsteInd.png", dpi=600)
+```
+
+#(6)Redo PCA analysis with subregion groups
+```{r }
+eigenValues <- read_delim("autosomal.plink.INDEP.pca.eigenval", delim = " ", col_names = F)
+eigenVectors <- read_delim("autosomal.plink.INDEP.pca.eigenvec", delim = " ", col_names = F)
+famDetails2 <- read.csv("samplePopId2.csv", header = TRUE)
+
+#Change column names of subgroup/family details
+colnames(famDetails2) <- c("extractionID", "Pop.ID", "Sample.ID", "Group")
+
+#Join eigenVector with sample data
+newEigenVectors2 <- left_join(eigenVectors, famDetails2, by = "extractionID")
+
+#Remove unwanted columns in newEigenVectors dataframe
+pcaEigenVectors2 <- newEigenVectors2[c(24,2:22,26)]
+
+```
+
+#(7) PCA with subgroups plot
+```{r}
+pcaEigenVectors2$Pop.ID = factor(pcaEigenVectors2$Pop.ID)
+Plot2 <- ggplot(data = pcaEigenVectors2) +
+  geom_point(mapping = aes(x = X3, y = X4, color = Group, shape = Group), size = 3, show.legend = TRUE ) +
+  geom_hline(yintercept = 0, linetype="dotted") +
+  geom_vline(xintercept = 0, linetype="dotted") + #
+  stat_ellipse(aes(x = X3, y = X4, color = Group), type = "norm") +
+  labs(x = paste0("Principal component 1 (",eigen_percent[1,1]," %)"),
+      y = paste0("Principal component 2 (",eigen_percent[2,1]," %)"),
+      colour = "An. stephensi Pop", shape = "An. stephensi Pop") +
+  theme_classic(base_size = 15)
+
+Plot2 + scale_colour_discrete(name  ="An. stephensi Population",
+                            breaks=c("Subgroup 1", "Subgroup 2"),
+                            labels=c("Subgroup 1", "Subgroup 2")) +
+      scale_shape_discrete(name  ="An. stephensi Population",
+                           breaks=c("Subgroup 1", "Subgroup 2"),
+                           labels=c("Subgroup 1", "Subgroup 2"))
+
+ggsave("pca_Anste_subgroups.png", dpi=600)
+```
+
+
